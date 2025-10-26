@@ -3,6 +3,7 @@ from src.agents.planner_agent import planner_agent
 from src.agents.search_agent import search_agent
 from src.agents.summarizer_agent import summarizer_agent
 from src.agents.writer_agent import writer_agent
+from src.agents.critic_agent import critic_agent
 
 from pydantic import BaseModel, Field
 from typing import List
@@ -36,11 +37,11 @@ plan_task = Task(
     output_json=ResearchPlan
 )
 
-# Task 2: Searching & Scraping (Updated)
+# Task 2: Searching & Scraping (No changes)
 search_task = Task(
     description=(
         "You will receive a JSON research plan. For each sub-question in the plan: "
-        "1. Use the `Google Search_tool` or `arxiv_search_tool` based on the `source_type` and `keywords`. " # <-- FIXED TYPO HERE (removed space)
+        "1. Use the `Google Search_tool` or `arxiv_search_tool` based on the `source_type` and `keywords`. "
         "2. From the search results, identify the single most relevant URL (or ArXiv paper). "
         "3. Use the `scrape_website_tool` to get the full text content from that URL. "
         "   (If it's an ArXiv paper, the summary is sufficient, no need to scrape). "
@@ -53,10 +54,10 @@ search_task = Task(
         "will be used for summarization."
     ),
     agent=search_agent,
-    context=[plan_task] # This task depends on the plan
+    context=[plan_task]
 )
 
-# Task 3: Summarization (Updated)
+# Task 3: Summarization (No changes)
 summarize_task = Task(
     description=(
         "You will receive a large block of unstructured text (the research findings) "
@@ -73,27 +74,67 @@ summarize_task = Task(
         "This summary will be the direct input for the final report writer."
     ),
     agent=summarizer_agent,
-    context=[search_task, plan_task] # Depends on the scraped text AND the original plan
+    context=[search_task, plan_task]
 )
 
-# Task 4: Writing (Updated)
-write_task = Task(
+# Task 4: Drafting (UPDATED)
+draft_task = Task(
     description=(
         "You will receive a structured summary of findings and the original research plan. "
-        "Your job is to synthesize this information into a final, professional research report. "
+        "Your job is to synthesize this information into a **first draft** of a professional research report. "
         "The report must be in Markdown format and include: "
         "1. An Abstract (a brief overview of the topic and key findings). "
         "2. An Introduction (based on the original topic). "
         "3. Key Findings (based on the summarized text, organized by theme or sub-question). "
         "4. Challenges / Future Scope (if mentioned in the findings). "
         "5. A list of References (any URLs or ArXiv IDs cited in the summary). "
-        "The report should be coherent, well-written, and directly address the user's original topic."
+        "The report should be coherent and well-written. "
+        "**IMPORTANT: Do NOT add a date, author name, or any other metadata. "
+        "The report should start directly with the main title (e.g., '# Report Title...').**"
     ),
     expected_output=(
-        "A final, polished research report in Markdown format, "
+        "A comprehensive **first draft** of the research report in Markdown format, "
         "containing all the sections mentioned in the description."
     ),
     agent=writer_agent,
-    context=[summarize_task, plan_task] # Depends on the summary AND the original plan/topic
+    context=[summarize_task, plan_task]
+)
+
+# Task 5: Critiquing (No changes)
+critique_task = Task(
+    description=(
+        "Review the provided draft report. You also have the original research plan "
+        "and the summarized findings for context. "
+        "Your review must: "
+        "1. Check for factual accuracy by cross-referencing the draft against the summarized findings. "
+        "2. Check for logical flow, clarity, and good structure. "
+        "3. Ensure the report fully addresses all sub-questions from the original research plan. "
+        "4. Provide a bullet-point list of actionable feedback for improvement. "
+        "If the report is excellent and needs no changes, just say 'The report is excellent and ready to publish.'"
+    ),
+    expected_output=(
+        "A bullet-point list of constructive criticism, feedback, and specific suggestions "
+        "for improving the draft report. Or, a single line of approval."
+    ),
+    agent=critic_agent,
+    context=[draft_task, summarize_task, plan_task] # Needs all context
+)
+
+# Task 6: Final Revision (UPDATED)
+final_report_task = Task(
+    description=(
+        "You will receive a **first draft** of a report and a list of **critiques** from a senior analyst. "
+        "Your job is to meticulously apply all the feedback from the critique to the draft. "
+        "Revise the document to create a final, polished, and publishable research report. "
+        "If the critique was 'The report is excellent and ready to publish,' then just output the original draft. "
+        "**IMPORTANT: Do NOT add a date, author name, or any other metadata. "
+        "The final report must start directly with the main title (e.g., '# Report Title...').**"
+    ),
+    expected_output=(
+        "The final, revised, and polished research report in Markdown format. "
+        "This version should incorporate all feedback from the critique."
+    ),
+    agent=writer_agent, # <-- We re-use the writer agent, now in "revise" mode
+    context=[draft_task, critique_task] # Needs the draft and the feedback
 )
 
