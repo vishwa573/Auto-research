@@ -1,87 +1,111 @@
 import os
-import arxiv
-from langchain_core.tools import tool
+import json
+import requests
+from bs4 import BeautifulSoup
+from crewai_tools import tool
 from googleapiclient.discovery import build
+from langchain.tools import Tool
+import arxiv
 
-"""
-IMPORTANT: For these tools to work, you must set up API keys
-in a .env file in the root of your project:
-
-/.env
-    GOOGLE_API_KEY="your_google_api_key"
-    GOOGLE_CSE_ID="your_google_cse_id"
-
-You can get a Google API Key from the Google Cloud Console:
-https://console.cloud.google.com/apis/credentials
-
-You can get a Google CSE ID (Custom Search Engine ID) from:
-https://cse.google.com/cse/all
-(Set it up to search the entire web)
-"""
-
-@tool
-def google_search(query: str) -> str:
+# --- Google Search Tool ---
+@tool("google_search_tool")
+def google_search_tool(query: str) -> str:
     """
-    Searches Google for recent articles, blogs, and news on a given query.
-    Returns a list of formatted search results.
+    Searches Google for the given query and returns the top 5 results
+    with snippets and source titles.
     """
+    api_key = os.getenv("GOOGLE_API_KEY")
+    cse_id = os.getenv("GOOGLE_CSE_ID")
+    service = build("customsearch", "v1", developerKey=api_key)
     try:
-        api_key = os.environ.get("GOOGLE_API_KEY")
-        cse_id = os.environ.get("GOOGLE_CSE_ID")
-
-        if not api_key or not cse_id:
-            return "Error: GOOGLE_API_KEY or GOOGLE_CSE_ID not set in .env file."
-
-        service = build("customsearch", "v1", developerKey=api_key)
-        res = service.cse().list(q=query, cx=cse_id, num=5).execute() # Get top 5 results
-
-        if 'items' not in res:
-            return f"No results found for: {query}"
-
-        formatted_results = []
-        for item in res.get('items', []):
-            formatted_results.append(
-                f"Title: {item['title']}\n"
-                f"Snippet: {item['snippet']}\n"
-                f"URL: {item['link']}\n"
-                "-----------------"
+        res = (
+            service.cse()
+            .list(
+                q=query,
+                cx=cse_id,
+                num=5,
             )
-        return "\n".join(formatted_results)
-
+            .execute()
+        )
+        snippets = []
+        if "items" in res:
+            for item in res["items"]:
+                snippets.append({
+                    "title": item["title"],
+                    "link": item["link"],
+                    "snippet": item["snippet"]
+                })
+        return json.dumps(snippets, indent=2)
     except Exception as e:
-        return f"Error during Google Search: {e}"
+        return f"Error during Google search: {e}"
 
-@tool
-def arxiv_search(query: str) -> str:
+# --- ArXiv Search Tool ---
+@tool("arxiv_search_tool")
+def arxiv_search_tool(query: str) -> str:
     """
-    Searches ArXiv for academic papers on a given query.
-    Returns a list of formatted search results from ArXiv.
+    Searches ArXiv for the given query and returns the top 3 results
+    with summaries.
     """
     try:
-        # Use the arxiv library to search
         search = arxiv.Search(
             query=query,
-            max_results=3, # Get top 3 relevant papers
+            max_results=3,
             sort_by=arxiv.SortCriterion.Relevance
         )
-        
-        client = arxiv.Client()
-        results = list(client.results(search))
-
-        if not results:
-            return f"No ArXiv papers found for: {query}"
-
-        formatted_results = []
-        for result in results:
-            formatted_results.append(
-                f"Paper Title: {result.title}\n"
-                f"Authors: {', '.join(str(author) for author in result.authors)}\n"
-                f"Published: {result.published.date()}\n"
-                f"Summary: {result.summary[:500]}...\n" # Truncate summary
-                f"URL: {result.entry_id}\n"
-                "-----------------"
-            )
-        return "\n".join(formatted_results)
-        
+        results = []
+        for r in search.results():
+            results.append({
+                "title": r.title,
+                "summary": r.summary,
+                "url": r.entry_id
+            })
+        return json.dumps(results, indent=2)
     except Exception as e:
-        return f"Error during ArXiv Search: {e}"
+        return f"Error during ArXiv search: {e}"
+
+# --- NEW: Web Scraping Tool ---
+@tool("scrape_website_tool")
+def scrape_website_tool(url: str) -> str:
+    """
+    Fetches the content of a given URL and returns the clean,
+    unstructured text content.
+    """
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return f"Error: Failed to fetch URL with status code {response.status_code}"
+
+        soup = BeautifulSoup(response.text, "html.parser")
+
+        # Remove script and style elements
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
+
+        # Get text from common content tags
+        text_elements = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'li', 'span'])
+        text = ' '.join(elem.get_text(strip=True) for elem in text_elements)
+
+        # Basic cleaning
+        text = ' '.join(text.split()) # Remove extra whitespace
+        
+        if not text:
+            return "Error: No meaningful text could be extracted from the page."
+
+        return text[:8000] # Return first 8000 chars to avoid token limits
+
+    except requests.exceptions.RequestException as e:
+        return f"Error fetching or parsing URL: {e}"
+    except Exception as e:
+        return f"An unexpected error occurred during scraping: {e}"
+
+# --- Export Tools ---
+search_tools = [
+    google_search_tool,
+    arxiv_search_tool,
+    scrape_website_tool  # Add the new tool to the list
+]
+

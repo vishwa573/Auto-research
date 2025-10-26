@@ -1,7 +1,8 @@
 import os
 from crewai import Agent
 from langchain_google_genai import ChatGoogleGenerativeAI
-from src.tools.search_tools import google_search, arxiv_search
+from src.tools.search_tools import search_tools
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -22,18 +23,21 @@ llm = ChatGoogleGenerativeAI(
 )
 
 search_agent = Agent(
-    role="Expert Search & Retrieval Specialist",
-    goal="Find the most relevant and up-to-date information for a given set of research questions. "
-         "You must use the provided search tools to find information from both general web sources and academic paper databases.",
-    backstory="You are a master of information retrieval. You know exactly how to craft "
-              "the right search queries for any topic. You can sift through "
-              "Google and ArXiv to find the most precise and authoritative sources "
-              "needed to answer the research plan.",
+    role="Specialized Research Agent",
+    goal=(
+        "Execute web and academic searches based on a given plan. "
+        "Then, scrape the full text content from the most relevant URLs."
+    ),
+    backstory=(
+        "You are a highly efficient web automaton. You are given a "
+        "set of search queries and source types from a planner. "
+        "Your job is to use your search tools to find the most "
+        "relevant information and then use your scraping tool to "
+        "extract the *full text* from those sources for summarization."
+    ),
     llm=llm,
-    tools=[
-        google_search,
-        arxiv_search
-    ],
+    tools=search_tools, # <-- Now includes the scraper tool
     allow_delegation=False,
     verbose=True
 )
+

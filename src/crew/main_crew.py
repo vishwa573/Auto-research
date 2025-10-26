@@ -15,7 +15,7 @@ from src.crew.tasks import (
     plan_task,
     search_task,
     summarize_task,
-    write_report_task
+    write_task
 )
 
 def run_crew(topic: str):
@@ -45,7 +45,7 @@ def run_crew(topic: str):
             plan_task,
             search_task,
             summarize_task,
-            write_report_task
+            write_task
         ],
         process=Process.sequential, # Tasks will be executed one after another
         verbose=2 # Shows agent actions and tool usage in the console
