@@ -1,0 +1,11 @@
+# .gitignore
+.env/
+__pycache__/
+*.pyc
+venv/
+.venv/
+*env/
+env/
+ENV/
+.vscode/
+.streamlit/
