@@ -3,7 +3,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 import os
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-preview-09-2025",
+    model="models/gemini-2.5-flash-preview-09-2025",
     verbose=True,
     temperature=0.2, # Critics should be precise, not overly creative
     google_api_key=os.getenv("GEMINI_API_KEY")

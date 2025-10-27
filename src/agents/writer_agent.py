@@ -14,7 +14,7 @@ if not gemini_key:
 
 
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-preview-09-2025",
+    model="models/gemini-2.5-flash-preview-09-2025",
     google_api_key=gemini_key,
     verbose=True,
     temperature=0.1, # Low temperature for factual, consistent agent behavior

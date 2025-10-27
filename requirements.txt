@@ -13,6 +13,9 @@ streamlit==1.33.0
 requests
 beautifulsoup4
 crewai_tools
-langchain-community==0.2.1
-langchain-text-splitters==0.2.1
+
+langchain-text-splitters==0.0.2
+langsmith==0.1.17
+
 faiss-cpu==1.8.0
+openai
